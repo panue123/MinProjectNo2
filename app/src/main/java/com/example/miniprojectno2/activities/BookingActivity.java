@@ -50,13 +50,13 @@ public class BookingActivity extends AppCompatActivity {
         if (showtime != null) {
             Movie movie = db.dao().getMovieById(showtime.movieId);
             Theater theater = db.dao().getTheaterById(showtime.theaterId);
-
-            String info = "Phim: " + (movie != null ? movie.title : "") +
-                    "\nRạp: " + (theater != null ? theater.name : "") +
-                    "\nThời gian: " + showtime.date + " " + showtime.startTime +
-                    "\nGiá vé: " + String.format("%,.0f", showtime.price) + " VND";
+            
+            String info = "Phim: " + (movie != null ? movie.title : "") + 
+                         "\nRạp: " + (theater != null ? theater.name : "") +
+                         "\nThời gian: " + showtime.date + " " + showtime.startTime +
+                         "\nGiá vé: " + String.format("%,.0f", showtime.price) + " VND";
             tvBookingInfo.setText(info);
-
+            
             setupSeats();
         }
 
@@ -68,7 +68,11 @@ public class BookingActivity extends AppCompatActivity {
         List<Ticket> bookedTickets = db.dao().getTicketsByShowtime(showtime.id);
         List<String> bookedSeatNames = new ArrayList<>();
         for (Ticket t : bookedTickets) {
-            bookedSeatNames.add(t.seatNumber);
+            // Split by comma to handle aggregated seats
+            String[] seats = t.seatNumber.split(", ");
+            for (String s : seats) {
+                bookedSeatNames.add(s.trim());
+            }
         }
 
         String[] rows = {"A", "B", "C", "D"};
@@ -100,26 +104,29 @@ public class BookingActivity extends AppCompatActivity {
         String username = sp.getString("username", "");
         String bookingTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
 
+        // Aggregate seats into one string
         StringBuilder seatString = new StringBuilder();
-        for (String seat : selectedSeats) {
-            Ticket ticket = new Ticket();
-            ticket.showtimeId = showtime.id;
-            ticket.username = username;
-            ticket.seatNumber = seat;
-            ticket.totalPrice = showtime.price;
-            ticket.bookingTime = bookingTime;
-            db.dao().insertTicket(ticket);
-
-            if (seatString.length() > 0) seatString.append(", ");
-            seatString.append(seat);
+        for (int i = 0; i < selectedSeats.size(); i++) {
+            seatString.append(selectedSeats.get(i));
+            if (i < selectedSeats.size() - 1) {
+                seatString.append(", ");
+            }
         }
+
+        Ticket ticket = new Ticket();
+        ticket.showtimeId = showtime.id;
+        ticket.username = username;
+        ticket.seatNumber = seatString.toString();
+        ticket.totalPrice = selectedSeats.size() * showtime.price;
+        ticket.bookingTime = bookingTime;
+        db.dao().insertTicket(ticket);
 
         Intent intent = new Intent(this, TicketDetailActivity.class);
         intent.putExtra("movieTitle", db.dao().getMovieById(showtime.movieId).title);
         intent.putExtra("theaterName", db.dao().getTheaterById(showtime.theaterId).name);
         intent.putExtra("showtimeInfo", showtime.date + " " + showtime.startTime);
-        intent.putExtra("seats", seatString.toString());
-        intent.putExtra("totalPrice", selectedSeats.size() * showtime.price);
+        intent.putExtra("seats", ticket.seatNumber);
+        intent.putExtra("totalPrice", ticket.totalPrice);
         startActivity(intent);
         finish();
     }
